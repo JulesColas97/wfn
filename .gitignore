@@ -1,0 +1,26 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+
+# numba on-disk cache
+*.nbi
+*.nbc
+
+# xfoil runtime files
+xfoil_outputs/
+xfoil_input.txt
+
+# example outputs
+examples/**/results/
+examples/**/*.png
+examples/**/single_receiver.nc
+examples/airfoil_nrel/*.nc
+examples/airfoil_nrel/*.log
+venv
+old_project
