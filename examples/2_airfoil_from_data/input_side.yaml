@@ -1,0 +1,5 @@
+receivers:
+  type: cartesian
+  x: {min: -200, max: 200, n: 41}
+  z: {min: 0, max: 200, n: 41}
+  y: [0]

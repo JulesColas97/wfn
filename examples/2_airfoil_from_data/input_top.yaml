@@ -1,0 +1,25 @@
+receivers:
+  type: cartesian
+  x: {min: -200, max: 200, n: 41}
+  y: {min: -200, max: 200, n: 41}
+  z: [2]
+
+flow:
+  type: uniform
+  u: 15.0
+  epsilon: 0.01
+  shear_alpha: 0.2
+  z_ref: 90
+
+source:
+  turbine: MySe3.0-135.yaml                 # package default; or a path to a turbine YAML file
+  airfoil_database: ./results/MySE3_13seg_xfoil.nc
+  frequencies: [50, 80, 100, 200, 400, 500, 600, 800, 1000, 1200, 1500, 1800, 2000]
+  positions: [[0, 0, 87.94]]
+  atmosphere:
+    T_ref: 283.15
+    rho0: 1.225
+  n_jobs: 4
+  output: results/MySe3
+
+

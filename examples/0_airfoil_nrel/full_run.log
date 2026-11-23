@@ -1,0 +1,86 @@
+INFO: xfoil: segment 1/14, velocity 1/4
+INFO: xfoil: segment 1/14, velocity 2/4
+INFO: xfoil: segment 1/14, velocity 3/4
+INFO: xfoil: segment 1/14, velocity 4/4
+INFO: xfoil: segment 2/14, velocity 1/4
+INFO: xfoil: segment 2/14, velocity 2/4
+INFO: xfoil: segment 2/14, velocity 3/4
+INFO: xfoil: segment 2/14, velocity 4/4
+INFO: xfoil: segment 3/14, velocity 1/4
+INFO: xfoil: segment 3/14, velocity 2/4
+INFO: xfoil: segment 3/14, velocity 3/4
+INFO: xfoil: segment 3/14, velocity 4/4
+INFO: xfoil: segment 4/14, velocity 1/4
+INFO: xfoil: segment 4/14, velocity 2/4
+INFO: xfoil: segment 4/14, velocity 3/4
+INFO: xfoil: segment 4/14, velocity 4/4
+INFO: xfoil: segment 5/14, velocity 1/4
+INFO: xfoil: segment 5/14, velocity 2/4
+INFO: xfoil: segment 5/14, velocity 3/4
+INFO: xfoil: segment 5/14, velocity 4/4
+INFO: xfoil: segment 6/14, velocity 1/4
+INFO: xfoil: segment 6/14, velocity 2/4
+INFO: xfoil: segment 6/14, velocity 3/4
+INFO: xfoil: segment 6/14, velocity 4/4
+INFO: xfoil: segment 7/14, velocity 1/4
+INFO: xfoil: segment 7/14, velocity 2/4
+INFO: xfoil: segment 7/14, velocity 3/4
+INFO: xfoil: segment 7/14, velocity 4/4
+INFO: xfoil: segment 8/14, velocity 1/4
+INFO: xfoil: segment 8/14, velocity 2/4
+INFO: xfoil: segment 8/14, velocity 3/4
+INFO: xfoil: segment 8/14, velocity 4/4
+INFO: xfoil: segment 9/14, velocity 1/4
+INFO: xfoil: segment 9/14, velocity 2/4
+INFO: xfoil: segment 9/14, velocity 3/4
+INFO: xfoil: segment 9/14, velocity 4/4
+INFO: xfoil: segment 10/14, velocity 1/4
+INFO: xfoil: segment 10/14, velocity 2/4
+INFO: xfoil: segment 10/14, velocity 3/4
+INFO: xfoil: segment 10/14, velocity 4/4
+INFO: xfoil: segment 11/14, velocity 1/4
+INFO: xfoil: segment 11/14, velocity 2/4
+INFO: xfoil: segment 11/14, velocity 3/4
+INFO: xfoil: segment 11/14, velocity 4/4
+INFO: xfoil: segment 12/14, velocity 1/4
+INFO: xfoil: segment 12/14, velocity 2/4
+INFO: xfoil: segment 12/14, velocity 3/4
+INFO: xfoil: segment 12/14, velocity 4/4
+INFO: xfoil: segment 13/14, velocity 1/4
+INFO: xfoil: segment 13/14, velocity 2/4
+INFO: xfoil: segment 13/14, velocity 3/4
+INFO: xfoil: segment 13/14, velocity 4/4
+INFO: xfoil: segment 14/14, velocity 1/4
+INFO: xfoil: segment 14/14, velocity 2/4
+INFO: xfoil: segment 14/14, velocity 3/4
+INFO: xfoil: segment 14/14, velocity 4/4
+relative velocity range: 9.0 - 82.0 m/s
+done in 326 s -> NREL5MW_14seg_xfoil.nc
+<xarray.Dataset> Size: 221kB
+Dimensions:          (uinf: 4, aoa: 41, seg: 14)
+Coordinates:
+  * uinf             (uinf) float64 32B 9.005 33.34 57.67 82.0
+  * aoa              (aoa) float64 328B -20.0 -19.0 -18.0 ... 18.0 19.0 20.0
+  * seg              (seg) int64 112B 0 1 2 3 4 5 6 7 8 9 10 11 12 13
+    chord            (seg) float64 112B 4.557 4.652 4.458 ... 2.313 2.086 1.419
+Data variables: (12/13)
+    delta_star_top   (uinf, aoa, seg) float64 18kB 0.003815 0.003334 ... 0.2599
+    delta_star_bot   (uinf, aoa, seg) float64 18kB 1.295 1.098 ... 0.001071
+    theta_momen_top  (uinf, aoa, seg) float64 18kB 0.002742 0.001446 ... 0.01738
+    theta_momen_bot  (uinf, aoa, seg) float64 18kB 0.08292 0.08046 ... 0.000285
+    cf_top           (uinf, aoa, seg) float64 18kB 0.003938 0.000757 ... -1e-06
+    cf_bot           (uinf, aoa, seg) float64 18kB -1e-06 -1e-06 ... 0.000516
+    ...               ...
+    dpdx_bot         (uinf, aoa, seg) float64 18kB 2.685 3.01 ... -2.948e+03
+    UeUinf_top       (uinf, aoa, seg) float64 18kB 1.034 1.03 ... 1.121 1.126
+    UeUinf_bot       (uinf, aoa, seg) float64 18kB -1.064 -1.06 ... -0.8698
+    cl               (uinf, aoa, seg) float64 18kB -1.151 -1.395 ... 1.858 1.813
+    cd               (uinf, aoa, seg) float64 18kB 0.1009 0.08558 ... 0.09154
+    airfoil_index    (seg) int64 112B 0 1 1 2 3 3 4 4 5 5 5 5 5 5
+Attributes:
+    target_frac:   0.95
+    t_inf:         273.0
+    rho0:          1.2
+    nu:            1.48e-05
+    source:        xfoil
+    airfoil_name:  ['DU40', 'DU35', 'DU30', 'DU25', 'DU21', 'NACA64']

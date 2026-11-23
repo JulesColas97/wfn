@@ -1,0 +1,28 @@
+-180    0.00    0.5    0.0
+-150    0.00    0.5    0.0
+-130    0.00    0.5    0.0
+-120    0.00    0.5    0.0
+-90     0.00    0.5    0.0
+-60     0.00    0.5    0.0
+-50     0.00    0.5    0.0
+-30     0.00    0.5    0.0
+0       0.00    0.5    0.0
+30      0.00    0.5    0.0
+50      0.00    0.5    0.0
+60      0.00    0.5    0.0
+90      0.00    0.5    0.0
+120     0.00    0.5    0.0
+130     0.00    0.5    0.0
+150     0.00    0.5    0.0
+180     0.00    0.5    0.0
+0       0.00    0.0     0.0
+#
+# HJK 12 November 2001
+# Cilinder  with cd = 0.5 as prescribed by LM for the DOWEC 6 MW 
+# design ["Conceptyal design of a 6 MW (...), LMH64-5", 
+# Jeroen Kooij, 12 November 2001.
+#
+# Calculating Reynolds numbers for the blade root section
+# the cd of a cilinder between hub and c_max may be 0.3 < cd < 0.6.
+# For the part just inside c_max a lower cd may be used because
+# this section is partly elliptically shaped => file 'cilinder2'.

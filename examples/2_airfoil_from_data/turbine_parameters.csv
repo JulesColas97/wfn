@@ -1,0 +1,25 @@
+parameter,value,unit,source
+turbine,"MingYang MySE3.0-135 (Beleolico, Taranto, 10 units)",-,A
+rated power,3.0,MW,A
+rotor,"3 blades, upwind, variable speed, pitch regulated",-,A
+rotor diameter,135.0,m,A
+tip radius,67.5,m,A
+hub radius,2.5,m,B
+hub height (rotor apex) above MSL,87.94,m,A/C (tower top 85.5 + 2 m + tilt)
+tower top (yaw bearing) above MSL,85.5,m,A
+overhang (apex upwind of the tower axis),5.0,m,C
+shaft tilt,5.0,deg,C
+precone (upwind),2.5,deg,C
+blade tip prebend (upwind),3.0,m,C
+lowest blade tip above MSL (rigid),20.5,m,derived
+blade,"IEA-3.4-130-RWT blade (63 m) scaled to 65 m: a proxy, not the MySE blade",-,C
+blade mass,15.8,t,B
+rated rotor speed,12.0,rpm,B (ROSCO PC_RefSpd / gearbox 24.5)
+rotor speed in the record,4-12 (exclusion zone 5.5-6.5),rpm,A (SCADA)
+fine pitch below rated,0.0,deg,model (ROSCO)
+tower diameter base / top,5.0 / 3.5,m,B / C
+pile diameter,5.0,m,A
+A-weighted sound power LWA,not public; 107 dB(A) at 12 rpm assumed in our bound,dB(A) re 1 pW,"assumed (104-108 dB(A) for 3-MW, 130-140 m rotors)"
+model wind shear (power law),0.14,-,model (InflowWind)
+air: density / sound speed,1.2 / 343,kg/m3 / m/s,assumed
+sea water: density / sound speed,1025 / 1532,kg/m3 / m/s,assumed (21-23 deg C)
