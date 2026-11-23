@@ -18,6 +18,7 @@ from wfn.source import AirfoilDatabase, WindTurbine
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
+# wa
 wt = WindTurbine.from_yaml("input.yaml")
 
 # Velocity range seen by the blade segments over the operating range.

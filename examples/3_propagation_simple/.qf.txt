@@ -1,0 +1,11 @@
+:0:0: make: Entering directory '/home/jcolas/Documents/dev/postdoc-upm/wfn/src/wfn/propagation/EWAPE'
+:0:0: gfortran -c -fdefault-real-8 -O3 -march=native -fcheck=all -fbacktrace -I/usr/include/hdf5/serial input_params.f90
+:0:0: gfortran -c -fdefault-real-8 -O3 -march=native -fcheck=all -fbacktrace -I/usr/include/hdf5/serial mesh_module.f90
+:0:0: gfortran -c -fdefault-real-8 -O3 -march=native -fcheck=all -fbacktrace -I/usr/include/hdf5/serial splitstep_pe_wavy.f90
+/home/jcolas/Documents/dev/postdoc-upm/wfn/src/wfn/propagation/EWAPE/splitstep_pe_wavy.f90:6:0: 9:
+:0:0: 
+:0:0:     6 |     use flow_mod, only: flow2D_t
+:0:0:       |         1
+Fatal Error: Mismatch in components of derived type 'inputs_t' from 'input_params' at :1:0:  expecting 'case_name', but got 'casename'
+:0:0: compilation terminated.
+:0:0: make: Leaving directory '/home/jcolas/Documents/dev/postdoc-upm/wfn/src/wfn/propagation/EWAPE'

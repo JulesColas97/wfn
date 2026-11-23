@@ -10,7 +10,7 @@ receivers:
 
 propagation:
   # path to the compiled Fortran code, or leave it out and set WFN_WAPE
-  executable: ../../old_project/code/wape/2D_WAPE
+  executable: ../../src/wfn/propagation/piecewape/2D_WAPE
   work_dir: results/wape            # t<i>/<int(height)>/ folders + run.sh
   positions: [[0, 0]]
   source_heights: [50, 100]
@@ -24,6 +24,6 @@ propagation:
     dx_frac: 10
     impedance_sigmae: 50e3
     impedance_alphae: 100
-    dout: 2
+    dx_out: 1
     receiver_heights: [2]
     side: true

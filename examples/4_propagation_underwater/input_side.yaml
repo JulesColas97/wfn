@@ -1,0 +1,32 @@
+# Single input file. Each module reads only its own section:
+#   receivers   -> wfn.receivers.ReceiversConfig
+#   propagation -> wfn.propagation.PropagationConfig
+
+receivers:
+  type: cartesian
+  x: {min: -500, max: 500, n: 800}
+  z: {min: -20, max: 150, n: 150}
+  y: [0]
+
+propagation:
+  # path to the compiled Fortran code, or leave it out and set WFN_WAPE
+  executable: ../../src/wfn/propagation/EWAPE/2D_EWAPE
+  work_dir: results/wape            # t<i>/<int(height)>/ folders + run.sh
+  positions: [[0, 0]]
+  source_heights: [50, 100]
+  tau: [0, 180]
+  frequencies: [50]
+  domain: {xmin: -500, xmax: 500, ymin: -500, ymax: 500, zmax: 150}
+  output: results/deltaL            # results/deltaL_<i>.nc
+  backend: ewape
+  wape:                             # Fortran namelist parameters
+    case_name: c0
+    dx_frac: 10
+    receiver_heights: [2]
+    side: true
+    H: 20
+    sinus: True
+    A_wave: 1.92265 
+    lambda_wave: 102.5425
+    phi_wave: 0.0
+
