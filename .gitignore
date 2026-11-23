@@ -24,3 +24,7 @@ examples/airfoil_nrel/*.nc
 examples/airfoil_nrel/*.log
 venv
 old_project
+
+# Fortran 
+*.o
+*.mod
