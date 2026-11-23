@@ -5,7 +5,7 @@ Sub-packages are independent and only share the input file format and
 
 * :mod:`wfn.source`: wind turbine source model (TEN, TIN)
 * :mod:`wfn.flow`: flow models (interface + simple analytical flows)
-* :mod:`wfn.propagation`: WAPE propagation (to come)
+* :mod:`wfn.propagation`: WAPE propagation (setup, local runs, deltaL assembly)
 * :mod:`wfn.receivers`: receiver grids
 * :mod:`wfn.units`: dB helpers
 """

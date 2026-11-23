@@ -1,13 +1,42 @@
-"""WAPE propagation model (next step).
+"""WAPE propagation model.
 
-Planned content:
+Workflow::
 
-* ``config.py``: ``propagation`` section of the input file
-* ``inputs.py``: write the Fortran namelist ``input.nml`` for each (source height, direction)
-* ``launcher.py``: run the WAPE executable locally or through a scheduler
-* ``results.py``: read WAPE outputs into an ``xr.Dataset`` of ``deltaL`` with dims
-  ``(*grid_dims, freq, source_height)``
+    cfg = PropagationConfig.from_yaml("input.yaml")   # ``propagation`` section
+    prepare_cases(cfg)                                # input.nml + 2D_WAPE in t<i>/<h>/, run.sh
+    run_local(cfg.work_path)                          # run all cases
+    ds = assemble_polar(cfg, isource=0)               # deltaL(r, tau, z, freq, source_height)
+    ds.to_netcdf(cfg.output_file(0))
 
-Coupling with the source is then a function adding ``deltaL`` interpolated at
-the blade segment heights ``source_ds.z_seg`` to the source SPL.
+Coupling with the source is planned as interpolating ``deltaL`` at the blade
+segment heights ``source_ds.z_seg``.
 """
+from .cases import case_dir, case_inputs, local_domain, prepare_cases
+from .config import DomainConfig, PropagationConfig, RotorConfig, WapeInputs, discretize_rotor
+from .launcher import run_local, write_run_script
+from .namelist import namelist_text, read_namelist, write_namelist
+from .results import assemble_polar, loop_angle, read_wape, refine_angle, third_octave, to_grid, wape_filename
+
+__all__ = [
+    "PropagationConfig",
+    "WapeInputs",
+    "DomainConfig",
+    "RotorConfig",
+    "discretize_rotor",
+    "namelist_text",
+    "write_namelist",
+    "read_namelist",
+    "case_dir",
+    "case_inputs",
+    "local_domain",
+    "prepare_cases",
+    "write_run_script",
+    "run_local",
+    "read_wape",
+    "wape_filename",
+    "assemble_polar",
+    "loop_angle",
+    "refine_angle",
+    "to_grid",
+    "third_octave",
+]

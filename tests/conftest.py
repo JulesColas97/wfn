@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 OLD_CODE = ROOT / "old_project" / "code" / "prepost"
 OLD_NREL = ROOT / "old_project" / "examples" / "3_wind_turbine_aero" / "NREL"
-NREL_DB = ROOT / "examples" / "source_nrel" / "NREL5MW_14seg.nc"
+NREL_DB = ROOT / "examples" / "1_source_nrel" / "NREL5MW_14seg.nc"
 
 
 @pytest.fixture(scope="session")
