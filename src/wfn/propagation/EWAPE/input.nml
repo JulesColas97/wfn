@@ -1,0 +1,17 @@
+$inputs 
+
+frequencies = 200
+
+tau = 0
+Lz = 200
+source_height = 40
+Lx1 = 1000
+
+
+power = .true.
+u_ref = 50
+z_ref = 100
+alpha = 0.6
+
+
+$end inputs

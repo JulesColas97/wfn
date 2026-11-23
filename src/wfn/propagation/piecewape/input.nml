@@ -1,0 +1,68 @@
+$inputs
+! general parameters
+!------------------------------------------------------------------------------
+case_name='c0'
+c_air=343
+rho_air=1.2
+gamma0=1.4
+
+! Frequencies and angles (lists end at the first unset entry, no counter needed)
+frequencies(1)=50,100
+tau(1)=65
+! or: taumin=0, taumax=270, nb_tau=4
+
+! Domain definition
+Lx1=1000.0
+Lx2=500.0
+Ly1=1000.0
+Ly2=1000.0
+Lz=100
+source_height=70
+
+! type of PE model
+! 0: wape, 1: wape_m, 2: wape_eff, 3: nape, 4: nape_eff, 5: GT-PE
+! Ostashev, V.E., Colas, J., Dragna, D., Wilson, D.K., 2024.
+! J. Acoust. Soc. Am. 155, 1086-1102. https://doi.org/10.1121/10.0024460
+pe_model=5
+
+! Numerical parameters
+!------------------------------------------------------------------------------
+! dx = lambda / dx_frac
+dx_frac=10
+! PML
+pml_size=30
+pml_param=50000.0
+pml_n=2.5
+! ground impedance (0: rigid)
+impedance_mode=1
+impedance_sigmae=50000.0
+impedance_alphae=100.0
+
+! External flow
+!------------------------------------------------------------------------------
+external_flow=.false.
+uniform=.false.
+logarithmic=.false.
+u_ref=11
+fname_flow='./simple_flow.h5'
+Xs_flow=0
+Ys_flow=0
+
+! External topography
+!------------------------------------------------------------------------------
+external_terrain=.false.
+fname_terrain='./simple_hill.h5'
+Xs_terrain=150
+Ys_terrain=100
+gaussian_hill=.true.
+hill_length=100
+hill_pos=0
+hill_height=50
+
+! Output parameters
+!------------------------------------------------------------------------------
+dout=1
+receiver_heights(1)=2.0, 10, 20
+side=.true.
+continuation=.false.
+$end inputs
