@@ -314,8 +314,8 @@ end subroutine write_3Darray
 !! @brief Init the H5 file where the solution will be written
 !!
 !! @details this function initialize the h5 files with the relative path given from the execution folder
-!! the solution will be written in a file ./solution/case_name_theta.h5
-!! the matrix of p_real and imaginary will be stored in a group '/solution/$frequency$' and the mesh will be stored
+!! the solution will be written in a file ./case_name_theta.h5
+!! the matrix of p_real and imaginary will be stored in a group '/side/$frequency$' and the mesh will be stored
 !! in a group 'mesh'
 !!
 !!
@@ -346,7 +346,7 @@ subroutine init_file(case_name,theta, heights)
     call h5open_f(error)
     ! create new file
     call h5fcreate_f(file_name, H5F_ACC_TRUNC_F,file_id,error)
-    call h5gcreate_f(file_id, '/solution', group_id, error)
+    call h5gcreate_f(file_id, '/side', group_id, error)
     CALL h5gclose_f(group_id, error)
     call h5gcreate_f(file_id, '/planes', group_id, error)
     CALL h5gclose_f(group_id, error)

@@ -284,7 +284,7 @@ contains
             if (nb_tau == 1) then
                 cfg%tau(1) = taumin
             else
-                dtau = (taumax - taumin) / real(nb_tau - 1)
+                dtau = (taumax - taumin) / real(nb_tau)
                 do ii = 1, nb_tau
                 cfg%tau(ii) = taumin + real(ii-1) * dtau
                 end do

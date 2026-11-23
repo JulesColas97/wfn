@@ -43,22 +43,34 @@ def read_wape(fname: str | Path, side: bool = True) -> xr.Dataset:
             only the receiver heights (``receiver`` group).
 
     Returns:
-        Dataset with ``deltaL(r, z, freq)``, the ground height ``h(r)`` and the
-        absolute height ``z_abs(r, z)`` of every point.
+        Dataset with ``deltaL(r, z, freq)``, the ground height ``h(r)``, the
+        absolute height ``z_abs(r, z)`` of every point and, for the side plane, the
+        mean flow ``u(r, z)`` and sound speed ``c(r, z)`` when the file has them.
     """
+    flow = {}
     with h5py.File(fname, "r") as f:
         mesh = f["mesh"]
         r = np.array(mesh["x"])
-        h = np.array(mesh["h"])
-        group = f["solution"] if side else f["receiver"]
+        h = np.array(mesh["h"]) if "h" in mesh else np.zeros_like(r)
+        s = np.array(mesh["s"]) if "s" in mesh else np.zeros_like(r)
+
+        # same layout for EWAPE and piecewape: /side/<freq>/TL, /receiver/<freq>/TL, /flow/{u,c}
+        # (old files: /solution/<freq>/deltaL and /receiver/<freq>/deltaL)
+        if side:
+            group = f["side"] if "side" in f else f["solution"]
+        else:
+            group = f["receiver"]
         keys = [k for k in group.keys() if k != "heights"]
+        name = "TL" if "TL" in group[keys[0]] else "deltaL"
         if side:
             z = np.array(mesh["z"])
-            z_abs = np.array(mesh["z_grid"]).T
+            z_abs = np.array(mesh["z_grid"]).T if "z_grid" in mesh else z[None, :] + h[:, None]
+            if "flow" in f:
+                flow = {k: (("r", "z"), np.array(f["flow"][k]).T, {"units": "m/s"}) for k in f["flow"]}
         else:
             z = np.array(group["heights"])
             z_abs = z[None, :] + h[:, None]
-        dl = np.stack([np.array(group[k]["deltaL"]).T for k in keys], axis=-1)
+        dl = np.stack([np.array(group[k][name]).T for k in keys], axis=-1)
 
     order = np.argsort([float(k) for k in keys])
     freq = np.array([float(k) for k in keys])[order]
@@ -68,7 +80,9 @@ def read_wape(fname: str | Path, side: bool = True) -> xr.Dataset:
         {
             "deltaL": (("r", "z", "freq"), dl, {"units": "dB"}),
             "h": ("r", h, {"units": "m"}),
+            "s": ("r", s, {"units": "m"}),
             "z_abs": (("r", "z"), z_abs, {"units": "m"}),
+            **flow,
         },
         coords={"r": r, "z": z, "freq": freq},
         attrs={"side": int(side)},
@@ -78,8 +92,8 @@ def read_wape(fname: str | Path, side: bool = True) -> xr.Dataset:
 def assemble_polar(cfg: PropagationConfig, isource: int = 0) -> xr.Dataset:
     """Gather all WAPE runs of one source on a common polar grid centred on the source.
 
-    The grid has ``r = 0, dout, ... rmax`` with ``rmax`` the largest distance to
-    a corner of the domain plus 50 m, and ``z = 0, dout, ..., < Lz`` (``side``) or
+    The grid has ``r = 0, dx_out, ... rmax`` with ``rmax`` the largest distance to
+    a corner of the domain plus 50 m, and ``z = 0, dx_out, ..., < Lz`` (EWAPE: ``z = -H, -H + dz_out, ...``) (``side``) or
     the receiver heights. Beyond the end of a WAPE run, the last computed values
     are copied up to ``rmax``.
 
@@ -91,38 +105,53 @@ def assemble_polar(cfg: PropagationConfig, isource: int = 0) -> xr.Dataset:
     side = bool(w.side)
     dom = {"Lx1": w.Lx1, "Lx2": w.Lx2, "Ly1": w.Ly1, "Ly2": w.Ly2, "Lz": w.Lz}
     dom.update(local_domain(cfg, isource))
-    dr = w.dout
+    dr = w.dx_out
+    dz = w.dz_out if cfg.backend == "ewape" else w.dx_out
     rmax = np.sqrt(max(dom["Lx1"], dom["Lx2"]) ** 2 + max(dom["Ly1"], dom["Ly2"]) ** 2) + R_MARGIN
     r = np.arange(0, rmax + dr, dr)
-    z = np.arange(0, dom["Lz"], dr) if side else np.asarray(w.receiver_heights, dtype=float)
+    if not side:
+        z = np.asarray(w.receiver_heights, dtype=float)
+    elif cfg.backend == "ewape":
+        # EWAPE side plane: z = -H, -H + dz_out, ... (water below z = 0), see EWAPE/mesh_module.f90
+        z = -w.H + dz * np.arange(int(np.floor((w.H + dom["Lz"]) / dz)))
+    else:
+        z = np.arange(0, dom["Lz"], dz)
     tau = np.asarray(cfg.angles(), dtype=float)
     heights = np.asarray(cfg.heights(), dtype=float)
     freq = np.asarray(cfg.freqs(), dtype=float)
 
     dl = np.zeros((r.size, tau.size, z.size, freq.size, heights.size))
     terrain = np.full((r.size, tau.size), np.nan)
+    surface = np.full((r.size, tau.size), np.nan)
     for ih, height in enumerate(heights):
         for it, t in enumerate(tau):
             res = read_wape(wape_filename(case_dir(cfg, isource, height), w.case_name, t), side)
-            if res.sizes["z"] != z.size:
+            if side:
+                # the WAPE side plane also contains the PML rows above Lz: crop them
+                res = res.isel(z=slice(0, z.size))
+            if res.sizes["z"] != z.size or not np.allclose(res.z.values, z):
                 raise ValueError(
-                    f"WAPE run (height {height}, tau {t}) has {res.sizes['z']} heights, expected {z.size}"
+                    f"WAPE run (height {height}, tau {t}) has heights {res.z.values[[0, -1]]} "
+                    f"({res.sizes['z']} values), expected {z.size} values from {z[0]} to {z[-1]}"
                 )
             res_dl = res.deltaL.sel(freq=freq, method="nearest").values
             i0 = int(np.argmin(np.abs(r - res.r.values[0])))
             i1 = int(np.argmin(np.abs(r - res.r.values[-1])))
             dl[i0 : i1 + 1, it, :, :, ih] = res_dl
             terrain[i0 : i1 + 1, it] = res.h.values
+            surface[i0 : i1 + 1, it] = res.s.values
             # copy the last values up to rmax
             last = i0 + np.where(res_dl > -180)[0][-1]
             dl[last:, it, :, :, ih] = dl[last - 1, it, :, :, ih]
             terrain[last:, it] = terrain[last - 1, it]
+            surface[last:, it] = surface[last - 1, it]
 
     xs, ys = cfg.source_positions()[isource][:2]
     ds = receivers.polar(r, tau, z, center=(xs, ys))
     ds = ds.assign_coords(freq=("freq", freq, {"units": "Hz"}), source_height=("source_height", heights, {"units": "m"}))
     ds["deltaL"] = (("r", "tau", "z", "freq", "source_height"), dl, {"units": "dB"})
     ds["terrain"] = (("r", "tau"), terrain, {"units": "m"})
+    ds["surface"] = (("r", "tau"), surface, {"units": "m"})
     topo = bool(np.nanmax(terrain) - np.nanmin(terrain) > 1e-6)
     ds.attrs.update(side=int(side), topo=int(topo), topo_following=int(topo and not side), isource=isource)
     return ds
@@ -169,6 +198,7 @@ def to_grid(ds: xr.Dataset, grid: xr.Dataset) -> xr.Dataset:
     polar_rt = (ds.r.values, ds.tau.values)
 
     terrain = RegularGridInterpolator(polar_rt, ds.terrain.values, bounds_error=False, fill_value=0.0)(rt)
+    surface = RegularGridInterpolator(polar_rt, ds.surface.values, bounds_error=False, fill_value=0.0)(rt)
 
     single_level = "z" in grid.dims and grid.sizes["z"] == 1
     if ds.attrs.get("topo_following") and single_level:
@@ -189,6 +219,7 @@ def to_grid(ds: xr.Dataset, grid: xr.Dataset) -> xr.Dataset:
     out = xr.Dataset(coords=coords).assign_coords(freq=ds.freq, source_height=ds.source_height)
     out["deltaL"] = (dims + ("freq", "source_height"), dl, {"units": "dB"})
     out["terrain"] = (dims, terrain, {"units": "m"})
+    out["surface"] = (dims, surface, {"units": "m"})
     out.attrs.update(ds.attrs)
     out.attrs["grid_type"] = grid.attrs.get("grid_type", "")
     return out

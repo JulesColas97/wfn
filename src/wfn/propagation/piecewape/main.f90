@@ -86,7 +86,7 @@ do kk = first_angle_index,size(simu%tau)
 
     ! write 2D inetrpolated meanflow in h5 file
     if (output%write_flow .eqv. .true.) then 
-    call  write_2Dflow(flow2D%u(:,:), flow2D%c(:,:), flow2D%x, flow2D%z, simu%tau(kk))
+    call  write_2Dflow(simu%case_name, simu%tau(kk), flow2D%u(:,:), flow2D%c(:,:))
     print*, 'mean flow written'
     endif 
 

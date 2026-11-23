@@ -50,12 +50,19 @@ def local_domain(cfg: PropagationConfig, isource: int) -> dict:
 
 
 def case_inputs(cfg: PropagationConfig, isource: int, height: float) -> WapeInputs:
-    """Namelist parameters of one case."""
+    """Namelist parameters of one case.
+
+    The resolved angles are written as an explicit ``tau`` list and ``taumin/taumax/nb_tau`` are
+    cleared: the Fortran codes give priority to them, and would otherwise ignore the list.
+    """
     return dataclasses.replace(
         cfg.wape,
         **local_domain(cfg, isource),
         source_height=height,
         tau=cfg.angles(),
+        taumin=None,
+        taumax=None,
+        nb_tau=None,
         frequencies=cfg.freqs(),
     )
 

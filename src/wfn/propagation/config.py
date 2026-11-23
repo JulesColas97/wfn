@@ -20,107 +20,108 @@ class WapeInputs:
     """Parameters of the Fortran WAPE codes (``piecewape`` and ``EWAPE``).
 
     The field names are the keys of the Fortran namelist ``input.nml``: do not
-    rename them. Fields left to ``None`` are not written to the namelist. Keys
-    shared by both codes have the same name; the others are listed in
-    :data:`EWAPE_ONLY` and :data:`PIECEWAPE_ONLY` and are refused by the other
-    backend (see :func:`backend_fields`).
+    rename them. The default values are the ones of the Fortran codes
+    (``EWAPE/input_params.f90`` and ``piecewape/read_write.f90``): keep them in sync.
+    Keys shared by both codes have the same name; the others are listed in
+    :data:`EWAPE_ONLY` and :data:`PIECEWAPE_ONLY`. A key of the other code is
+    ignored if it has its default value and refused otherwise (see
+    :func:`wfn.propagation.namelist.namelist_text`).
     """
 
     # ---- shared by both codes
-    case_name: Optional[str] = "c0"
-    c_air: Optional[float] = 343
-    rho_air: Optional[float] = 1.2
-    T0: Optional[float] = None  # temperature [K]
-    p0: Optional[float] = None  # pressure [Pa]
-    frequencies: Optional[list[float]] = field(default_factory=list)
-    tau: Optional[list[float]] = None
-    taumin: Optional[float] = None
+    case_name: str = "c0"
+    c_air: float = 340.0
+    rho_air: float = 1.2
+    T0: float = 290.0  # temperature [K]
+    p0: float = 101325.0  # pressure [Pa]
+    frequencies: list[float] = field(default_factory=lambda: [100.0])
+    tau: list[float] = field(default_factory=lambda: [0.0])
+    taumin: Optional[float] = None  # unset: used with taumax and nb_tau only if all three are set
     taumax: Optional[float] = None
     nb_tau: Optional[int] = None
-    Lx1: Optional[float] = None
-    Lx2: Optional[float] = None
-    Ly1: Optional[float] = None
-    Ly2: Optional[float] = None
-    Lz: Optional[float] = None
-    source_height: Optional[float] = None
-    dx_frac: float = 10.0  # points per wavelength: dx = lambda / dx_frac
+    Lx1: float = 300.0
+    Lx2: float = 300.0
+    Ly1: float = 300.0
+    Ly2: float = 300.0
+    Lz: float = 100.0
+    source_height: float = 119.0
+    dx_frac: float = 2.0  # points per wavelength: dx = lambda / dx_frac
     pml_size: int = 30
     pml_param: float = 5e4
     pml_n: float = 2.5
     # flow
-    external_flow: Optional[bool] = None
-    uniform: Optional[bool] = None
-    logarithmic: Optional[bool] = None
-    u_ref: Optional[float] = None
-    fname_flow: Optional[str] = None
-    Xs_flow: Optional[float] = None
-    Ys_flow: Optional[float] = None
+    external_flow: bool = False
+    uniform: bool = False
+    logarithmic: bool = False
+    u_ref: float = 0.0
+    fname_flow: str = "./u.h5"
+    Xs_flow: float = 0.0
+    Ys_flow: float = 0.0
     # output
-    receiver_heights: list[float] = field(default_factory=list)
+    dx_out: float = 1.0  # output step [m] (in x and z for piecewape, in x only for EWAPE)
+    receiver_heights: list[float] = field(default_factory=lambda: [2.0])
     side: bool = True
 
     # ---- piecewape only
-    gamma0: Optional[float] = None
-    pe_model: Optional[int] = None
-    multi_domain: Optional[bool] = None
-    domain_step: Optional[float] = None
-    impedance_sigmae: Optional[float] = None
-    impedance_alphae: Optional[float] = None
-    impedance_mode: Optional[int] = None
-    impedance_Rs: Optional[float] = None
-    impedance_Om: Optional[float] = None
-    impedance_q2: Optional[float] = None
-    impedance_e: Optional[float] = None
-    external_terrain: Optional[bool] = None
-    fname_terrain: Optional[str] = None
-    Xs_terrain: Optional[float] = None
-    Ys_terrain: Optional[float] = None
-    gaussian_hill: Optional[bool] = None
-    hill_length: Optional[float] = None
-    hill_pos: Optional[float] = None
-    hill_height: Optional[float] = None
-    dout: Optional[int] = None
-    continuation: Optional[bool] = None
-    write_flow: Optional[bool] = None
-    xplane: Optional[list[float]] = None
-    yplane: Optional[list[float]] = None
+    gamma0: float = 1.4
+    pe_model: int = 0
+    multi_domain: bool = False
+    domain_step: float = 0.0
+    impedance_mode: int = 0  # 0: rigid ground
+    impedance_sigmae: float = 50000.0
+    impedance_alphae: float = 100.0
+    impedance_Rs: float = 7000.0
+    impedance_Om: float = 0.6
+    impedance_q2: float = 1.3
+    impedance_e: float = 0.13
+    external_terrain: bool = False
+    fname_terrain: str = "./terrain.h5"
+    Xs_terrain: float = 0.0
+    Ys_terrain: float = 0.0
+    gaussian_hill: bool = False
+    hill_length: float = 0.0
+    hill_pos: float = 0.0
+    hill_height: float = 0.0
+    continuation: bool = False
+    write_flow: bool = True  # write the mean flow (/flow group) in the output file
+    xplane: list[float] = field(default_factory=list)
+    yplane: list[float] = field(default_factory=list)
 
     # ---- EWAPE only
-    H: Optional[float] = None
-    c_water: Optional[float] = None
-    rho_water: Optional[float] = None
-    eta_air: Optional[float] = None
-    eta_water: Optional[float] = None
-    seabed_type: Optional[int] = None
-    rho_sb: Optional[float] = None
-    cp_sb: Optional[float] = None
-    cs_sb: Optional[float] = None
-    alpha_p: Optional[float] = None
-    alpha_s: Optional[float] = None
-    theta_sb: Optional[float] = None
-    d_pml_bot: Optional[float] = None
-    c_ref: Optional[float] = None
-    dz_frac: Optional[float] = None
-    n_pade: Optional[int] = None
-    n_pade_start: Optional[int] = None
-    theta_pade: Optional[float] = None
-    power: Optional[bool] = None
-    z_ref: Optional[float] = None
-    alpha: Optional[float] = None
-    z_roughness: Optional[float] = None
-    external_wave: Optional[bool] = None
-    sinus: Optional[bool] = None
-    A_wave: Optional[float] = None
-    lambda_wave: Optional[float] = None
-    phi_wave: Optional[float] = None
-    fname_wave: Optional[str] = None
-    Xs_wave: Optional[float] = None
-    Ys_wave: Optional[float] = None
-    abs_air: Optional[bool] = None
-    abs_water: Optional[bool] = None
-    rh: Optional[float] = None
-    dx_out: Optional[float] = None
-    dz_out: Optional[float] = None
+    H: float = 100.0
+    c_water: float = 1500.0
+    rho_water: float = 1000.0
+    eta_air: float = 0.0
+    eta_water: float = 0.0
+    seabed_type: int = 0
+    rho_sb: float = 1900.0
+    cp_sb: float = 1700.0
+    cs_sb: float = 0.0
+    alpha_p: float = 0.0
+    alpha_s: float = 0.0
+    theta_sb: float = 0.0
+    d_pml_bot: float = 2.0
+    c_ref: float = 850.0
+    dz_frac: float = 20.0
+    n_pade: int = 10
+    n_pade_start: int = 10
+    theta_pade: float = float(np.pi / 8)
+    power: bool = False
+    z_ref: float = 90.0
+    alpha: float = 0.2
+    z_roughness: float = 0.01
+    external_wave: bool = False
+    sinus: bool = False
+    A_wave: float = 2.0
+    lambda_wave: float = 80.0
+    phi_wave: float = 0.0
+    fname_wave: str = "./wave.h5"
+    Xs_wave: float = 0.0
+    Ys_wave: float = 0.0
+    abs_air: bool = False
+    abs_water: bool = False
+    rh: float = 80.0
+    dz_out: float = 1.0
 
 
 def _fields_from(first: str, last: str) -> frozenset[str]:
@@ -187,7 +188,7 @@ class PropagationConfig:
           output: results/deltaL          # <output>_<i>.nc
           wape:                           # Fortran namelist parameters (WapeInputs)
             case_name: c0
-            dout: 5                       # piecewape only
+            dx_out: 5
             receiver_heights: [2]
             side: true
 
@@ -250,19 +251,16 @@ class PropagationConfig:
             return list(self.source_heights)
         if self.rotor is not None:
             return discretize_rotor(self.rotor.hub_height, self.rotor.diameter, self.rotor.n).tolist()
-        if self.wape.source_height is not None:
-            return [self.wape.source_height]
-        raise ValueError("no source height: set source_heights, rotor or wape.source_height")
+        return [self.wape.source_height]
 
     def angles(self) -> list[float]:
         if self.tau:
             return list(self.tau)
-        if self.wape.tau:
-            return list(self.wape.tau)
         w = self.wape
-        if None not in (w.taumin, w.taumax, w.nb_tau):
-            return np.linspace(w.taumin, w.taumax, w.nb_tau).tolist()  # same as the Fortran codes
-        raise ValueError("no propagation angle: set tau, wape.tau or wape.taumin/taumax/nb_tau")
+        if None not in (w.taumin, w.taumax, w.nb_tau):  # same priority as in the Fortran codes
+            # taumax is excluded (full circle: 0, 360, 4 -> 0, 90, 180, 270), same operations as the Fortran
+            return (w.taumin + np.arange(w.nb_tau) * ((w.taumax - w.taumin) / w.nb_tau)).tolist()
+        return list(w.tau)
 
     def freqs(self) -> list[float]:
         return list(self.frequencies) if self.frequencies else list(self.wape.frequencies)

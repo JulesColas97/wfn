@@ -9,7 +9,7 @@ gamma0=1.4
 ! Frequencies and angles (lists end at the first unset entry, no counter needed)
 frequencies(1)=50,100
 tau(1)=65
-! or: taumin=0, taumax=270, nb_tau=4
+! or: taumin=0, taumax=360, nb_tau=4 (taumax excluded: 0, 90, 180, 270)
 
 ! Domain definition
 Lx1=1000.0
@@ -17,7 +17,7 @@ Lx2=500.0
 Ly1=1000.0
 Ly2=1000.0
 Lz=100
-source_height=70
+source_height=119
 
 ! type of PE model
 ! 0: wape, 1: wape_m, 2: wape_eff, 3: nape, 4: nape_eff, 5: GT-PE
@@ -28,7 +28,7 @@ pe_model=5
 ! Numerical parameters
 !------------------------------------------------------------------------------
 ! dx = lambda / dx_frac
-dx_frac=10
+dx_frac=2
 ! PML
 pml_size=30
 pml_param=50000.0
@@ -61,7 +61,7 @@ hill_height=50
 
 ! Output parameters
 !------------------------------------------------------------------------------
-dout=1
+dx_out=1
 receiver_heights(1)=2.0, 10, 20
 side=.true.
 continuation=.false.

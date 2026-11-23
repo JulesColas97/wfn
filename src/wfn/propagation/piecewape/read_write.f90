@@ -73,7 +73,7 @@ subroutine read_param(var0,simu,imp,output,pml,flow3D, terrain2D)
     logical                             :: continuation ! not implemented yet, but implemented for GTPE
 
     !temporary output
-    real                                :: dout
+    real                                :: dx_out
     integer                             :: nbout
     integer                             :: nb_receiver_heights
     real                                :: receiver_heights(MAX_N)
@@ -113,7 +113,7 @@ subroutine read_param(var0,simu,imp,output,pml,flow3D, terrain2D)
     ! define element to be read from input.nml
     namelist/inputs/ case_name, nb_tau, tau,taumin, taumax, frequencies, &
                     Lx1,Lx2,Ly1,Ly2,Lz,dx_frac, &                  
-                    continuation,dout, nbout, receiver_heights,xplane,yplane, &
+                    continuation,dx_out, nbout, receiver_heights,xplane,yplane, &
                     side,write_flow, &
                     case_name,&
                     c_air, rho_air, gamma0,T0, P0, &
@@ -143,10 +143,16 @@ subroutine read_param(var0,simu,imp,output,pml,flow3D, terrain2D)
     Ly1 = 300.0
     Ly2 = 300.0
     Lz = 100.0
-    source_height = 100.0
-    dx_frac = 10.0
+    source_height = 119.0
+    dx_frac = 2.0
     u_ref = 0.0
-    dout = 1
+    fname_flow = './u.h5'
+    Xs_flow = 0.0
+    Ys_flow = 0.0
+    fname_terrain = './terrain.h5'
+    Xs_terrain = 0.0
+    Ys_terrain = 0.0
+    dx_out = 1.0
     nbout = 1
     
     pe_model = 0
@@ -185,7 +191,7 @@ subroutine read_param(var0,simu,imp,output,pml,flow3D, terrain2D)
 
     ! default output
     side = .true.
-    write_flow = .false.
+    write_flow = .true.
 
     ! default Atmospheric values 
     c_air = 340
@@ -250,7 +256,7 @@ subroutine read_param(var0,simu,imp,output,pml,flow3D, terrain2D)
         if (nb_tau == 1) then
             simu%tau(1) = taumin
         else
-            dtau = (taumax - taumin) / real(nb_tau - 1)
+            dtau = (taumax - taumin) / real(nb_tau)
             do i = 1, nb_tau
                 simu%tau(i) = taumin + real(i-1) * dtau
             end do
@@ -325,7 +331,7 @@ subroutine read_param(var0,simu,imp,output,pml,flow3D, terrain2D)
     terrain2D%hl = hill_length
     terrain2D%hpos = hill_pos
 
-    output%dout = dout
+    output%dout = dx_out
     nb_receiver_heights = count_set(receiver_heights)
     if (nb_receiver_heights == 0) then
         receiver_heights(1) = 2.0
@@ -396,7 +402,7 @@ subroutine write_side2(case_name,tau,freq,sol,mesh)
     ! create a group (with frequency as name)
     a = int(freq)
     freq_str = adjustl(int_to_str(a))
-    group_name = trim('/solution/'//freq_str)
+    group_name = trim('/side/'//freq_str)
     call h5gcreate_f(file_id, group_name, group_id, error)
 
     ! write p imag and real
@@ -424,7 +430,7 @@ subroutine write_side2(case_name,tau,freq,sol,mesh)
     endif 
     nx = size(sol%deltaL_side,1)
     ny = size(sol%deltaL_side,2)
-    call write_2Darray(sol%deltaL_side, nx, ny,'deltaL',group_id)
+    call write_2Darray(sol%deltaL_side, nx, ny,'TL',group_id)
 
     ! nx = size(sol%deltaL_rec,1)
     ! ny = size(sol%deltaL_rec,2)
@@ -481,13 +487,13 @@ subroutine write_side(case_name,tau,freq,sol)
     ! create a group (with frequency as name)
     a = int(freq)
     freq_str = adjustl(int_to_str(a))
-    group_name = trim('/solution/'//freq_str)
+    group_name = trim('/side/'//freq_str)
     call h5gcreate_f(file_id, group_name, group_id, error)
 
     ! write p imag and real
   !  call write_2Darray(real(p_vect), ceiling((1.*nx)/nbout), ceiling((1.*ny)/nbout),'p_real',group_id)
   !  call write_2Darray(aimag(p_vect), ceiling((1.*nx)/nbout), ceiling((1.*ny)/nbout),'p_imag',group_id)
-    call write_2Darray(sol%deltaL_side, nx, ny,'deltaL',group_id)
+    call write_2Darray(sol%deltaL_side, nx, ny,'TL',group_id)
 
 
     ! close group
@@ -627,7 +633,7 @@ subroutine write_receiver(case_name,tau,freq, nx,heights, receiver, mesh)
     group_name = trim('/receiver/'//freq_str)
 
     call h5gcreate_f(file_id, group_name, group_id, error)
-    call write_2Darray(receiver, nx, size(heights),'deltaL',group_id)
+    call write_2Darray(receiver, nx, size(heights),'TL',group_id)
     
     if (allocated(mesh%Lxc)) then 
     call  write_1Darray(mesh%Lxc,mesh%ndomain,'Lxc',group_id)
@@ -700,47 +706,38 @@ subroutine write_mesh(case_name,tau,mesh)
     call h5close_f(error)
 end subroutine write_mesh
 
-subroutine write_2Dflow(u, c, x, z, tau)
+subroutine write_2Dflow(case_name, tau, u, c)
     use hdf5
     use utils
     use types
     implicit none
 
     ! input variables
-    real,dimension(:,:), intent(in)                           :: u, c
-    real,dimension(:,:), intent(in)                           :: x, z
-    real, intent(in)                                          :: tau
-    character(len=15)                                         :: tau_str,file_name
+    character(len=40), intent(in)                           :: case_name
+    real, intent(in)                                        :: tau
+    real,dimension(:,:), intent(in)                         :: u, c
 
     ! HDF5 variables
-    integer(HID_T)                                          :: file_id
+    integer(HID_T)                                          :: file_id, group_id
     integer                                                 :: error
+    character(len=10)                                       :: tau_str
+    character(len=50)                                       :: file_name
 
-    ! Initialize fortran interface
-    call h5open_f(error)
-    ! create new file
-    if (int(tau)==tau) then 
+    if (int(tau)==tau) then
         tau_str = trim(adjustl(int_to_str(int(tau))))
-    else 
+    else
         tau_str = trim(adjustl(float_to_str(tau)))
     end if
-    file_name=trim('./flow_'//trim(tau_str)//'.h5')
-    call h5fcreate_f(file_name, H5F_ACC_TRUNC_F,file_id,error)
+    file_name=trim('./'//trim(case_name)//'_'//trim(tau_str)//'.h5')
 
-    ! write mesh
-    call  write_2Darray(x,size(x,1),size(x,2),'x',file_id)
-    call  write_2Darray(z,size(z,1),size(z,2),'z',file_id)
-
-    ! write flow
-    call write_2Darray(u, size(u,1), size(u,2), 'u',file_id)
-    call write_2Darray(c, size(c,1), size(c,2), 'c',file_id)
-    ! call write_2Darray(flow2D%tau, ceiling((1.*nx)/nbout), nz,'tau',file_id)
-    ! call write_2Darray(flow2D%epsilon, ceiling((1.*nx)/nbout), nz,'epsilon',file_id)
-    ! call write_2Darray(flow2D%gamma, ceiling((1.*nx)/nbout), nz,'gamma',file_id)
-
-    ! close file
+    ! same file and same layout as EWAPE: group /flow with u and c on the coarse (x, z) mesh
+    call h5open_f(error)
+    call h5fopen_f(file_name, H5F_ACC_RDWR_F, file_id, error)
+    call h5gcreate_f(file_id, 'flow', group_id, error)
+    call write_2Darray(u, size(u,1), size(u,2), 'u',group_id)
+    call write_2Darray(c, size(c,1), size(c,2), 'c',group_id)
+    call h5gclose_f(group_id, error)
     call h5fclose_f(file_id,error)
-    !close fortran interface
     call h5close_f(error)
 end subroutine write_2Dflow
 
