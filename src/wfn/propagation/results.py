@@ -6,11 +6,15 @@
   ``deltaL(r, tau, z, freq, source_height)`` and ``terrain(r, tau)``.
 * :func:`to_grid`: interpolate a polar result onto any receiver grid.
 * :func:`third_octave`: average the frequencies into third-octave bands.
+
+The classes :class:`PeResults` (one WAPE file) and :class:`DeltaL` (all the runs of one source)
+wrap these functions and the resulting ``xr.Dataset`` (attribute ``ds``).
 """
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+import json
 
 import h5py
 import numpy as np
@@ -21,6 +25,8 @@ from .. import receivers
 from ..units import third_octave_frequencies
 from .cases import case_dir, local_domain
 from .config import PropagationConfig
+from wfn.receivers import ReceiversConfig
+from wfn.config import unstructure
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +91,7 @@ def read_wape(fname: str | Path, side: bool = True) -> xr.Dataset:
             **flow,
         },
         coords={"r": r, "z": z, "freq": freq},
-        attrs={"side": int(side)},
+        attrs={"side": int(side), "field": name},
     )
 
 
@@ -106,26 +112,27 @@ def assemble_polar(cfg: PropagationConfig, isource: int = 0) -> xr.Dataset:
     dom = {"Lx1": w.Lx1, "Lx2": w.Lx2, "Ly1": w.Ly1, "Ly2": w.Ly2, "Lz": w.Lz}
     dom.update(local_domain(cfg, isource))
     dr = w.dx_out
-    dz = w.dz_out if cfg.backend == "ewape" else w.dx_out
     rmax = np.sqrt(max(dom["Lx1"], dom["Lx2"]) ** 2 + max(dom["Ly1"], dom["Ly2"]) ** 2) + R_MARGIN
     r = np.arange(0, rmax + dr, dr)
     if not side:
         z = np.asarray(w.receiver_heights, dtype=float)
-    elif cfg.backend == "ewape":
-        # EWAPE side plane: z = -H, -H + dz_out, ... (water below z = 0), see EWAPE/mesh_module.f90
-        z = -w.H + dz * np.arange(int(np.floor((w.H + dom["Lz"]) / dz)))
     else:
-        z = np.arange(0, dom["Lz"], dz)
+        z = w.z_levels(dom["Lz"])
     tau = np.asarray(cfg.angles(), dtype=float)
     heights = np.asarray(cfg.heights(), dtype=float)
     freq = np.asarray(cfg.freqs(), dtype=float)
 
+    field = None
     dl = np.zeros((r.size, tau.size, z.size, freq.size, heights.size))
     terrain = np.full((r.size, tau.size), np.nan)
     surface = np.full((r.size, tau.size), np.nan)
     for ih, height in enumerate(heights):
         for it, t in enumerate(tau):
             res = read_wape(wape_filename(case_dir(cfg, isource, height), w.case_name, t), side)
+            if field is None:
+                field = res.attrs["field"]
+            elif res.attrs["field"] != field:
+                raise ValueError(f"WAPE run (height {height}, tau {t}) holds {res.attrs['field']}, others hold {field}")
             if side:
                 # the WAPE side plane also contains the PML rows above Lz: crop them
                 res = res.isel(z=slice(0, z.size))
@@ -153,7 +160,8 @@ def assemble_polar(cfg: PropagationConfig, isource: int = 0) -> xr.Dataset:
     ds["terrain"] = (("r", "tau"), terrain, {"units": "m"})
     ds["surface"] = (("r", "tau"), surface, {"units": "m"})
     topo = bool(np.nanmax(terrain) - np.nanmin(terrain) > 1e-6)
-    ds.attrs.update(side=int(side), topo=int(topo), topo_following=int(topo and not side), isource=isource)
+    ds.attrs.update(side=int(side), topo=int(topo), topo_following=int(topo and not side), isource=isource,
+                    field=field)
     return ds
 
 
@@ -189,6 +197,7 @@ def to_grid(ds: xr.Dataset, grid: xr.Dataset) -> xr.Dataset:
     Returns:
         Dataset with ``deltaL(*grid_dims, freq, source_height)`` and ``terrain(*grid_dims)``.
     """
+    ds = ensure_source_height_dim(ds)
     X, Y, Z, dims, coords = receivers.receiver_positions(grid)
     dx = X - ds.attrs["center_x"]
     dy = Y - ds.attrs["center_y"]
@@ -225,6 +234,32 @@ def to_grid(ds: xr.Dataset, grid: xr.Dataset) -> xr.Dataset:
     return out
 
 
+def tl_to_deltaL(ds: xr.Dataset) -> xr.Dataset:
+    """Convert a transmission loss field (EWAPE, ``attrs["field"] == "TL"``) to an effective deltaL.
+
+    ``deltaL = -TL + 20 log10(Rff / 1 m) + 26 delta_water`` with ``Rff`` the distance between the source
+    (at ``source_height``) and the receiver, and ``delta_water = 1`` for receivers below the surface
+    ``ds.surface``. Works on the polar result and on the output of :func:`to_grid`.
+    A dataset that is already a deltaL is returned unchanged.
+
+    Convert before :func:`third_octave`: the energetic average does not commute with the sign of TL.
+    """
+    if ds.attrs.get("field", "deltaL") != "TL":
+        return ds
+    ds = ensure_source_height_dim(ds)
+    X, Y, Z, grid_dims, _ = receivers.receiver_positions(ds)
+    r = np.hypot(X - ds.attrs["center_x"], Y - ds.attrs["center_y"])
+    hs = ds.source_height.values
+    rff = np.maximum(np.sqrt(r[..., None] ** 2 + (Z[..., None] - hs) ** 2), 1.0)  # (*grid, source_height)
+    water = Z < ds.surface.transpose(*grid_dims).values  # (*grid)
+    corr = 20 * np.log10(rff)[..., None, :] + 26.0 * water[..., None, None]  # (*grid, 1, source_height)
+    dl = ds.deltaL.transpose(*grid_dims, "freq", "source_height") + corr
+    out = ds.copy()
+    out["deltaL"] = dl.transpose(*ds.deltaL.dims).assign_attrs(units="dB")
+    out.attrs.update(field="deltaL", converted_from_TL=1)
+    return out
+
+
 DEFAULT_FC = [50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000]
 DEFAULT_NFC = [1, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 4, 5, 5]
 
@@ -246,3 +281,127 @@ def third_octave(ds: xr.Dataset, fc=None, nfc=None) -> xr.Dataset:
     out = ds.drop_dims("freq")
     out["deltaL"] = dl.transpose(*ds.deltaL.dims)
     return out
+
+
+def ensure_source_height_dim(ds: xr.Dataset) -> xr.Dataset:
+    """Make ``source_height`` a dimension of ``deltaL`` (also when it is a scalar coordinate)."""
+    if "deltaL" not in ds or "source_height" in ds.deltaL.dims:
+        return ds
+    if "source_height" not in ds.coords:
+        ds = ds.assign_coords(source_height=[float(ds.attrs.get("source_height", np.nan))])
+        return ds.assign(deltaL=ds.deltaL.expand_dims("source_height", axis=-1))
+    h = np.atleast_1d(ds.source_height.values)
+    ds = ds.drop_vars("source_height")
+    ds = ds.assign(deltaL=ds.deltaL.expand_dims("source_height", axis=-1))
+    return ds.assign_coords(source_height=("source_height", h, {"units": "m"}))
+
+
+class _DatasetWrapper:
+    """Holds an ``xr.Dataset`` in ``ds``; unknown attributes and ``[]`` are forwarded to it."""
+
+    def __init__(self, ds: xr.Dataset):
+        self.ds = ds
+
+    def __getattr__(self, name: str):
+        if name == "ds":  # not set yet (copy, pickle)
+            raise AttributeError(name)
+        return getattr(self.ds, name)
+
+    def __getitem__(self, key):
+        return self.ds[key]
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}\n{self.ds!r}"
+
+    def _new(self, ds: xr.Dataset):
+        return type(self)(ds)
+
+    def third_octave(self, fc=None, nfc=None):
+        """See :func:`third_octave`."""
+        return self._new(third_octave(self.ds, fc, nfc))
+
+
+class PeResults(_DatasetWrapper):
+    """Result of one WAPE run (one source height, one angle): ``deltaL(r, z, freq)``."""
+
+    @classmethod
+    def from_file(cls, fname: str | Path, side: bool = True) -> "PeResults":
+        """See :func:`read_wape`."""
+        return cls(read_wape(fname, side))
+
+    def plot_side(self, freq: float, cmap: str = "RdBu_r", **kwargs):
+        """Vertical plane of ``deltaL`` at the frequency closest to ``freq``."""
+        da = self.ds.deltaL.sel(freq=freq, method="nearest")
+        return da.assign_coords(z_abs=self.ds.z_abs).plot.pcolormesh(x="r", y="z", cmap=cmap, **kwargs)
+
+    def plot_line(self, freq: float, z: float, ax=None, **kwargs):
+        """``deltaL(r)`` at the height ``z`` and the frequency closest to ``freq``."""
+        da = self.ds.deltaL.sel(freq=freq, z=z, method="nearest")
+        return da.plot.line(x="r", ax=ax, **kwargs)
+
+
+class DeltaL(_DatasetWrapper):
+    """``deltaL(r, tau, z, freq, source_height)`` of one source on a polar grid (old ``DeltaLField``)."""
+    def __init__(self, ds: xr.Dataset, cfg: PropagationConfig | None = None):
+        super().__init__(ensure_source_height_dim(ds))
+        self.cfg = cfg
+
+    @classmethod
+    def from_cases(cls, cfg: PropagationConfig, isource: int = 0) -> "DeltaL":
+        return cls(assemble_polar(cfg, isource), cfg)
+
+    def _new(self, ds):                      # keep cfg through loop_angle, to_grid, ...
+        return type(self)(ds, self.cfg)    
+
+
+    @classmethod
+    def from_yaml(cls, fname: str, isource: int = 0) -> "DeltaL":
+        """See :func:`assemble_polar`."""
+        cfg = PropagationConfig.from_yaml(fname)
+        ds = assemble_polar(cfg, isource)
+        ds.attrs["yaml_fname"] = fname
+        return cls(ds,cfg)
+
+    def save(self, path) -> Path:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ds = self.ds.copy()                  # shallow copy: do not touch self.ds.attrs
+        if self.cfg is not None:
+            ds.attrs["cfg"] = json.dumps(unstructure(self.cfg))
+        ds.to_netcdf(path)
+        return path
+
+    @classmethod
+    def load(cls, path) -> "DeltaL":
+        with xr.open_dataset(path) as ds:
+            ds = ds.load()
+        cfg = None
+        if "cfg" in ds.attrs:
+            data = json.loads(ds.attrs.pop("cfg"))
+            base_dir = data.pop("base_dir", None)
+            cfg = PropagationConfig.from_dict(data, base_dir=base_dir)
+        return cls(ds, cfg)
+
+    @property
+    def is_tl(self) -> bool:
+        """True if the field is still a transmission loss (EWAPE), see :meth:`to_deltaL`."""
+        return self.ds.attrs.get("field") == "TL"
+
+    def to_deltaL(self) -> "DeltaL":
+        """See :func:`tl_to_deltaL`."""
+        return self._new(tl_to_deltaL(self.ds))
+
+    def loop_angle(self) -> "DeltaL":
+        """See :func:`loop_angle`."""
+        return self._new(loop_angle(self.ds))
+
+    def refine_angle(self) -> "DeltaL":
+        """See :func:`refine_angle`."""
+        return self._new(refine_angle(self.ds))
+
+    def to_grid(self, grid: xr.Dataset=None) -> "DeltaL":
+        """See :func:`to_grid`. The result is on the receiver grid, not polar."""
+        if grid is None and self.ds.yaml_fname is not None:
+            print(f"build receiver from {self.ds.yaml_fname}")
+            grid = ReceiversConfig.from_yaml(self.ds.yaml_fname).build()
+        return self._new(to_grid(self.ds, grid))

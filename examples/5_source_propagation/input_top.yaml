@@ -1,0 +1,43 @@
+receivers:
+  type: cartesian
+  x: {min: -500, max: 500, n: 101}
+  y: {min: -500, max: 500, n: 101}
+  z: [2]
+
+flow:
+  type: uniform
+  u: 15.0
+  epsilon: 0.01
+  shear_alpha: 0.2
+  z_ref: 90
+
+source:
+  turbine: MySe3.0-135.yaml                 # package default; or a path to a turbine YAML file
+  frequencies: [50, 100] #[50, 80, 100, 200, 400, 500, 600, 800, 1000, 1200, 1500, 1800, 2000]
+  positions: [[0, 0, 87.94]]
+  atmosphere:
+    T_ref: 283.15
+    rho0: 1.225
+  n_jobs: 4
+  output: results/MySe3
+
+propagation:
+  # path to the compiled Fortran code, or leave it out and set WFN_WAPE
+  executable: ../../src/wfn/propagation/piecewape/2D_WAPE
+  work_dir: results/wape            # t<i>/<int(height)>/ folders + run.sh
+  positions: [[0, 0]]
+  source_heights: [40, 90, 140]
+  tau: [0, 90,  180, 270]
+  frequencies: [50, 100] #[50, 80, 100, 200, 400, 500, 600, 800, 1000, 1200, 1500, 1800, 2000]
+  domain: {xmin: -500, xmax: 500, ymin: -500, ymax: 500, zmax: 150}
+  output: results/deltaL            # results/deltaL_<i>.nc
+  wape:                             # Fortran namelist parameters
+    case_name: c0
+    pe_model: 0
+    dx_frac: 10
+    impedance_sigmae: 50e3
+    impedance_alphae: 100
+    dx_out: 1
+    receiver_heights: [2]
+    side: true
+

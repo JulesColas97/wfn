@@ -22,11 +22,11 @@ propagation:
   wape:                            # Fortran namelist parameters
     case_name: c0
     dx_frac: 10
-    receiver_heights: [2]
+    receiver_heights: [-15, -10, -5, 10, 20]
     taumin: 0
     taumax: 360
     nb_tau: 36
-    side: true
+    side: False
     H: 20
     sinus: True
     A_wave: 1.92265 

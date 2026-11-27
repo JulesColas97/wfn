@@ -24,6 +24,8 @@ examples/airfoil_nrel/*.nc
 examples/airfoil_nrel/*.log
 venv
 old_project
+old_codes
+studies
 
 # Fortran 
 *.o

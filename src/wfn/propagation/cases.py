@@ -41,11 +41,7 @@ def local_domain(cfg: PropagationConfig, isource: int) -> dict:
         Lz=d.zmax,
         Xs_flow=xs,
         Ys_flow=ys,
-        **(
-            dict(Xs_wave=xs, Ys_wave=ys)
-            if cfg.backend == "ewape"
-            else dict(Xs_terrain=xs, Ys_terrain=ys)
-        ),
+        **cfg.wape.local_domain_extra(xs, ys),
     )
 
 
@@ -79,7 +75,7 @@ def prepare_cases(cfg: PropagationConfig) -> list[Path]:
         for height in cfg.heights():
             path = case_dir(cfg, isource, height)
             path.mkdir(parents=True, exist_ok=True)
-            write_namelist(case_inputs(cfg, isource, height), path / "input.nml", cfg.backend)
+            write_namelist(case_inputs(cfg, isource, height), path / "input.nml")
             shutil.copy(exe, path / "2D_WAPE")
             dirs.append(path)
     write_run_script(dirs, cfg.work_path)

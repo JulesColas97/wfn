@@ -210,3 +210,50 @@ def test_xfoil_database_smoke():
     assert db.ds.aoa.values.tolist() == [0, 2, 4]
     assert np.all(db.ds.delta_star_top.values > 0)
     assert np.all(np.isfinite(db.ds.cl.values))
+
+
+# ----------------------------------------------------------------------- third-octave bands
+def _flat_psd(freq, value=1e-6, extra=()):
+    shape = (*[n for _, n in extra], len(freq))
+    dims = (*[d for d, _ in extra], "freq")
+    return xr.DataArray(np.full(shape, value), dims=dims, coords={"freq": np.asarray(freq, float)})
+
+
+def test_third_octave_flat_psd():
+    fc, nfc = [50, 63, 80, 100], [1, 2, 3, 4]
+    s0 = 1e-6
+    psd = _flat_psd(units.third_octave_frequencies(fc, nfc), s0, extra=(("x", 2),))
+    band = units.psd_to_third_octave(psd, fc)
+    assert band.dims == ("x", "freq")
+    np.testing.assert_array_equal(band.freq, fc)
+    lo, hi = units.third_octave_edges(fc)
+    np.testing.assert_allclose(band.isel(x=0), 2 * np.pi * s0 * (hi - lo))
+    # contiguous bands: the overall level is the integral of the flat PSD from the first to the last edge
+    oaspl = units.db_sum(10 * np.log10(band / units.P_REF**2), "freq")
+    np.testing.assert_allclose(oaspl, 10 * np.log10(2 * np.pi * s0 * (hi[-1] - lo[0]) / units.P_REF**2))
+
+
+def test_third_octave_single_frequency_and_missing_bands():
+    psd = _flat_psd([100.0, 1000.0], 2e-6)
+    band = units.psd_to_third_octave(psd)
+    np.testing.assert_array_equal(band.freq, [100, 1000])      # empty bands dropped
+    lo, hi = units.third_octave_edges([100, 1000])
+    np.testing.assert_allclose(band, 2 * np.pi * 2e-6 * (hi - lo))
+    np.testing.assert_allclose(hi - lo, 0.232 * np.array([100, 1000]), rtol=2e-2)  # old code: df = 0.232 fc
+    with pytest.raises(ValueError):
+        units.psd_to_third_octave(_flat_psd([100.0]), fc=[1000])
+
+
+def test_spl_third_octave_is_linear_in_psd():
+    rng = np.random.default_rng(0)
+    freq = units.third_octave_frequencies([100, 125], [2, 2])
+    dims = ("x", "blade", "seg", "freq")
+    ds = xr.Dataset(
+        {"Spp_TEN": (dims, rng.uniform(1e-7, 1e-6, (2, 3, 4, 4))),
+         "Spp_TIN": (dims, rng.uniform(1e-7, 1e-6, (2, 3, 4, 4)))},
+        coords={"freq": freq},
+    )
+    a = units.db_sum(units.spl_third_octave(ds), ("blade", "seg"))
+    b = units.spl_third_octave(ds.sum(("blade", "seg")))
+    xr.testing.assert_allclose(a, b)
+    assert a.dims == ("x", "freq")

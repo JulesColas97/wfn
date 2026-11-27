@@ -7,10 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import WapeInputs, backend_fields
-
-
-_DEFAULTS = dataclasses.asdict(WapeInputs())
+from .config import WapeInputs
 
 
 # keys of the old WAPE namelists, renamed in the current codes
@@ -29,23 +26,11 @@ def _format(key: str, value) -> list[str]:
     return [f"{key}={value}"]
 
 
-def namelist_text(inputs: WapeInputs, backend: str = "piecewape") -> str:
-    """Namelist content (``$inputs ... $end inputs``) for ``backend``. Empty lists are skipped.
-
-    Every key of the backend is written (with its default value if not changed). A key
-    of the other backend is ignored if it has its default value.
-
-    Raises:
-        ValueError: if a key that does not exist in ``backend`` was changed from its default.
-    """
-    allowed = backend_fields(backend)
+def namelist_text(inputs: WapeInputs) -> str:
+    """Namelist content (``$inputs ... $end inputs``). Unset values and empty lists are skipped."""
     lines = ["$inputs"]
     for f in dataclasses.fields(inputs):
         value = getattr(inputs, f.name)
-        if f.name not in allowed:
-            if value != _DEFAULTS[f.name]:
-                raise ValueError(f"{f.name!r} is not an input of the {backend} backend")
-            continue
         if value is None or (isinstance(value, (list, tuple)) and len(value) == 0):
             continue
         lines += _format(f.name, value)
@@ -53,12 +38,12 @@ def namelist_text(inputs: WapeInputs, backend: str = "piecewape") -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_namelist(inputs: WapeInputs, path: str | Path, backend: str = "piecewape") -> Path:
+def write_namelist(inputs: WapeInputs, path: str | Path) -> Path:
     """Write ``inputs`` to ``path`` (a file, or a directory where ``input.nml`` is created)."""
     path = Path(path)
     if path.is_dir():
         path = path / "input.nml"
-    path.write_text(namelist_text(inputs, backend))
+    path.write_text(namelist_text(inputs))
     return path
 
 
@@ -76,13 +61,16 @@ def _parse_value(val: str):
         return val
 
 
-def read_namelist(path: str | Path) -> WapeInputs:
-    """Build :class:`WapeInputs` from an ``input.nml`` file. Unknown keys are ignored."""
+def read_namelist(path: str | Path, backend: str = "piecewape") -> WapeInputs:
+    """Build the inputs of ``backend`` (:class:`PiecewapeInputs` or :class:`EwapeInputs`) from an ``input.nml``.
+
+    Keys that do not exist in the backend are ignored."""
+    inputs_cls = WapeInputs.for_backend(backend)
     path = Path(path)
     if path.is_dir():
         path = path / "input.nml"
     content = path.read_text()
-    fields = {f.name: f for f in dataclasses.fields(WapeInputs)}
+    fields = {f.name: f for f in dataclasses.fields(inputs_cls)}
     data = {}
     for key, value in re.findall(r"(\w+)(?:\(1\))?\s*=\s*([^!\n$]+)", content):
         key = LEGACY_KEYS.get(key, key)  # namelists written by the old code
@@ -95,4 +83,4 @@ def read_namelist(path: str | Path) -> WapeInputs:
             data[key] = parts[0] if len(parts) == 1 else parts
     if "cfl" in re.findall(r"^\s*(\w+)\s*=", content, flags=re.M):  # old key: dx = cfl * lambda
         data["dx_frac"] = 1 / float(re.search(r"^\s*cfl\s*=\s*([^!\n,]+)", content, flags=re.M).group(1))
-    return WapeInputs(**data)
+    return inputs_cls(**data)

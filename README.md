@@ -86,6 +86,15 @@ NREL polars, and `2_explore_bl.py` opens the interactive Dash explorer
   symmetric in y (wakes, veer).
 - **Yaw is now handled consistently.** The segment positions, the Doppler angles and the
   transforms all use it.
+- **Source/propagation coupling weights fixed.** The old `SplField.combine_linear` interpolated
+  ΔL between the two nearest source heights as `ratio*dL_left + (1-ratio)*dL_right`, which swaps
+  the weights. Its `searchsorted(side="left")` also picked the wrong neighbour when a segment sat
+  exactly on a source height. `wfn.spl.combine` uses plain linear interpolation (in energy) and
+  clips `z_seg` to the range of source heights, as before.
+- **Third-octave bands from the linear PSD.** `units.spl` is a level per Hz (from the PSD), so
+  the OASPL needs third-octave band levels first (`units.spl_third_octave`, band energy =
+  bandwidth × mean PSD in the band). The old `SplField.computeThirdOctave` passed the SPL in dB to
+  `integrateThirdOctave`, which multiplied dB values by the bandwidth.
 - **Smaller changes.** `rho0`/`nu0` are now passed to the wall pressure models instead of being
   hard-coded. `c0` works when it is given. Every Clauser-parameter case is handled. XFoil runs in
   its own temp dir, so the 64-character path limit no longer applies.

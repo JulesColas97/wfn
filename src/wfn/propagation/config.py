@@ -5,28 +5,46 @@ import dataclasses
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 import numpy as np
 
 from ..config import get_section, load_yaml, structure
 
 
-BACKENDS = ("piecewape", "ewape")
-
-
 @dataclass
 class WapeInputs:
-    """Parameters of the Fortran WAPE codes (``piecewape`` and ``EWAPE``).
+    """Namelist parameters shared by the Fortran WAPE codes (``piecewape`` and ``EWAPE``).
 
-    The field names are the keys of the Fortran namelist ``input.nml``: do not
-    rename them. The default values are the ones of the Fortran codes
-    (``EWAPE/input_params.f90`` and ``piecewape/read_write.f90``): keep them in sync.
-    Keys shared by both codes have the same name; the others are listed in
-    :data:`EWAPE_ONLY` and :data:`PIECEWAPE_ONLY`. A key of the other code is
-    ignored if it has its default value and refused otherwise (see
-    :func:`wfn.propagation.namelist.namelist_text`).
+    Use the subclass of the backend: :class:`PiecewapeInputs` or :class:`EwapeInputs`
+    (``WapeInputs.for_backend(name)``). The field names are the keys of the Fortran
+    namelist ``input.nml``: do not rename them. The default values are the ones of the
+    Fortran codes (``EWAPE/input_params.f90`` and ``piecewape/read_write.f90``): keep them in sync.
     """
+
+    backend: ClassVar[str] = ""
+    _registry: ClassVar[dict[str, type["WapeInputs"]]] = {}
+
+    def __init_subclass__(cls, backend: str | None = None, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if backend is not None:
+            cls.backend = backend
+            WapeInputs._registry[backend] = cls
+
+    @classmethod
+    def for_backend(cls, backend: str) -> type["WapeInputs"]:
+        """Inputs class of ``backend`` (``"piecewape"`` or ``"ewape"``)."""
+        if backend not in cls._registry:
+            raise ValueError(f"unknown backend {backend!r}, expected one of {tuple(cls._registry)}")
+        return cls._registry[backend]
+
+    def local_domain_extra(self, xs: float, ys: float) -> dict:
+        """Backend specific keys that depend on the source position."""
+        return {}
+
+    def z_levels(self, Lz: float) -> np.ndarray:
+        """Heights of the vertical plane written by the code, for a domain of height ``Lz``."""
+        return np.arange(0, Lz, self.dx_out)
 
     # ---- shared by both codes
     case_name: str = "c0"
@@ -62,7 +80,11 @@ class WapeInputs:
     receiver_heights: list[float] = field(default_factory=lambda: [2.0])
     side: bool = True
 
-    # ---- piecewape only
+
+@dataclass
+class PiecewapeInputs(WapeInputs, backend="piecewape"):
+    """Namelist parameters of ``piecewape`` (onshore, topography), on top of :class:`WapeInputs`."""
+
     gamma0: float = 1.4
     pe_model: int = 0
     multi_domain: bool = False
@@ -87,7 +109,14 @@ class WapeInputs:
     xplane: list[float] = field(default_factory=list)
     yplane: list[float] = field(default_factory=list)
 
-    # ---- EWAPE only
+    def local_domain_extra(self, xs: float, ys: float) -> dict:
+        return dict(Xs_terrain=xs, Ys_terrain=ys)
+
+
+@dataclass
+class EwapeInputs(WapeInputs, backend="ewape"):
+    """Namelist parameters of ``EWAPE`` (offshore), on top of :class:`WapeInputs`."""
+
     H: float = 100.0
     c_water: float = 1500.0
     rho_water: float = 1000.0
@@ -123,22 +152,12 @@ class WapeInputs:
     rh: float = 80.0
     dz_out: float = 1.0
 
+    def local_domain_extra(self, xs: float, ys: float) -> dict:
+        return dict(Xs_wave=xs, Ys_wave=ys)
 
-def _fields_from(first: str, last: str) -> frozenset[str]:
-    names = [f.name for f in dataclasses.fields(WapeInputs)]
-    return frozenset(names[names.index(first) : names.index(last) + 1])
-
-
-PIECEWAPE_ONLY = _fields_from("gamma0", "yplane")
-EWAPE_ONLY = _fields_from("H", "dz_out")
-
-
-def backend_fields(backend: str) -> frozenset[str]:
-    """Names of the :class:`WapeInputs` fields understood by ``backend``."""
-    if backend not in BACKENDS:
-        raise ValueError(f"unknown backend {backend!r}, expected one of {BACKENDS}")
-    other = EWAPE_ONLY if backend == "piecewape" else PIECEWAPE_ONLY
-    return frozenset(f.name for f in dataclasses.fields(WapeInputs)) - other
+    def z_levels(self, Lz: float) -> np.ndarray:
+        # side plane: z = -H, -H + dz_out, ... (water below z = 0), see EWAPE/mesh_module.f90
+        return -self.H + self.dz_out * np.arange(int(np.floor((self.H + Lz) / self.dz_out)))
 
 
 @dataclass
@@ -197,7 +216,7 @@ class PropagationConfig:
     """
 
     backend: str = "piecewape"  # "piecewape" (onshore, topography) or "ewape" (offshore)
-    wape: WapeInputs = field(default_factory=WapeInputs)
+    wape: Optional[WapeInputs] = None  # None: defaults of the backend (see ``__post_init__``)
     executable: Optional[str] = None
     work_dir: str = "."
     positions: Optional[list[list[float]]] = None
@@ -209,12 +228,22 @@ class PropagationConfig:
     output: Optional[str] = None
     base_dir: Optional[str] = None
 
+    def __post_init__(self):
+        inputs_cls = WapeInputs.for_backend(self.backend)  # validates the backend
+        if self.wape is None:
+            self.wape = inputs_cls()
+        elif not isinstance(self.wape, inputs_cls):
+            raise TypeError(f"backend {self.backend!r} needs {inputs_cls.__name__}, got {type(self.wape).__name__}")
+
     @classmethod
     def from_dict(cls, data: dict, base_dir: str | Path | None = None) -> "PropagationConfig":
-        cfg = structure(dict(data), cls)
+        data = dict(data)
+        wape = data.pop("wape", None) or {}
+        inputs_cls = WapeInputs.for_backend(data.get("backend", cls.backend))
+        cfg = structure(data, cls)  # ``wape`` is built apart: its class depends on the backend
+        cfg.wape = structure(dict(wape), inputs_cls)  # unknown keys (e.g. of the other backend) raise
         if base_dir is not None:
             cfg.base_dir = str(base_dir)
-        backend_fields(cfg.backend)  # validate
         return cfg
 
     @classmethod

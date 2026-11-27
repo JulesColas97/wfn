@@ -1,3 +1,0 @@
-:0:0: make: Entering directory '/home/jcolas/Documents/dev/postdoc-upm/wfn/src/wfn/propagation/EWAPE'
-:0:0: make: Nothing to be done for 'compil'.
-:0:0: make: Leaving directory '/home/jcolas/Documents/dev/postdoc-upm/wfn/src/wfn/propagation/EWAPE'

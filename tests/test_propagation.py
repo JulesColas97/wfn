@@ -7,6 +7,8 @@ from wfn import receivers
 from wfn.propagation.cases import case_inputs
 from wfn.propagation import (
     PropagationConfig,
+    EwapeInputs,
+    PiecewapeInputs,
     WapeInputs,
     assemble_polar,
     case_dir,
@@ -18,10 +20,12 @@ from wfn.propagation import (
     read_wape,
     refine_angle,
     third_octave,
+    tl_to_deltaL,
     to_grid,
     wape_filename,
     write_namelist,
 )
+from wfn.propagation import DeltaL
 from wfn.units import third_octave_frequencies
 
 
@@ -86,7 +90,7 @@ def test_discretize_rotor():
 
 # --------------------------------------------------------------- namelist
 def test_namelist_format():
-    txt = namelist_text(WapeInputs(case_name="a", frequencies=[50.0, 100.0], impedance_mode=0))
+    txt = namelist_text(PiecewapeInputs(case_name="a", frequencies=[50.0, 100.0], impedance_mode=0))
     lines = txt.splitlines()
     assert lines[0] == "$inputs" and lines[-1] == "$end inputs"
     assert "case_name='a'" in lines
@@ -98,7 +102,7 @@ def test_namelist_format():
 
 
 def test_namelist_roundtrip(tmp_path):
-    w = WapeInputs(case_name="c0", frequencies=[100.0], tau=[0.0, 45.0], Lx1=1000.0, Lz=200.0,
+    w = PiecewapeInputs(case_name="c0", frequencies=[100.0], tau=[0.0, 45.0], Lx1=1000.0, Lz=200.0,
                    impedance_mode=0, receiver_heights=[2.0, 10.0], fname_flow="/a/flow.h5")
     path = write_namelist(w, tmp_path)
     assert read_namelist(path) == w
@@ -117,17 +121,23 @@ def test_case_inputs_explicit_tau(tmp_path):
     assert w.tau == [0, 45] and (w.taumin, w.taumax, w.nb_tau) == (None, None, None)
 
 
-def test_namelist_backend():
-    w = WapeInputs(case_name="a", source_height=40.0, H=50.0, pml_size=30)
-    txt = namelist_text(w, "ewape")
+def test_namelist_backend(tmp_path):
+    w = EwapeInputs(case_name="a", source_height=40.0, H=50.0, pml_size=30)
+    txt = namelist_text(w)
     assert "source_height=40.0" in txt and "H=50.0" in txt and "pml_size=30" in txt
-    assert "H=" not in namelist_text(WapeInputs(), "piecewape")  # default EWAPE key: ignored
+    assert "H=" not in namelist_text(PiecewapeInputs())
+    assert "pe_model" not in txt  # piecewape only
+    assert read_namelist(write_namelist(w, tmp_path), "ewape") == w
+    assert WapeInputs.for_backend("ewape") is EwapeInputs
     with pytest.raises(ValueError):
-        namelist_text(w, "piecewape")  # H changed but EWAPE only
-    with pytest.raises(ValueError):
-        namelist_text(WapeInputs(pe_model=2), "ewape")  # pe_model is piecewape only
-    with pytest.raises(ValueError):
-        namelist_text(w, "unknown")
+        WapeInputs.for_backend("unknown")
+
+
+def test_wrong_backend_key():
+    with pytest.raises(Exception):
+        PropagationConfig.from_dict({"backend": "ewape", "wape": {"pe_model": 2}})
+    cfg = PropagationConfig.from_dict({"backend": "ewape", "wape": {"H": 50}})
+    assert isinstance(cfg.wape, EwapeInputs) and cfg.wape.H == 50
 
 
 # ------------------------------------------------------------------ cases
@@ -265,3 +275,43 @@ def test_third_octave(tmp_path):
     np.testing.assert_allclose(out.deltaL.sel(freq=200), 10 * np.log10(2))
     with pytest.raises(ValueError):
         third_octave(out, fc, nfc)
+
+
+def test_field_attribute_is_inherited(tmp_path):
+    r = np.arange(0, 100, 10.0)
+    z = np.arange(0, 30, 10.0)
+    write_fake_wape(tmp_path / "a.h5", r, z, [50], lambda R, Z, f: R + Z + f)
+    write_fake_wape(tmp_path / "b.h5", r, z, [50], lambda R, Z, f: R + Z + f, legacy=True)
+    assert read_wape(tmp_path / "a.h5").attrs["field"] == "TL"
+    assert read_wape(tmp_path / "b.h5").attrs["field"] == "deltaL"
+
+    cfg = base_cfg(tmp_path)
+    make_runs(cfg, lambda R, Z, f, h, t: 0.01 * R)
+    dl = DeltaL.from_cases(cfg, 0)
+    assert dl.is_tl
+    assert dl.loop_angle().is_tl and dl.refine_angle().is_tl
+    grid = receivers.cartesian([100.0, 150.0], [50.0, 80.0], [10.0])
+    assert dl.loop_angle().to_grid(grid).is_tl
+    dl.save(tmp_path / "dl.nc")
+    assert DeltaL.load(tmp_path / "dl.nc").is_tl
+
+
+def test_tl_to_deltaL():
+    r = np.array([0.0, 30.0, 60.0])
+    z = np.array([-5.0, 5.0])
+    ds = receivers.polar(r, [0.0, 90.0], z, center=(10.0, 20.0))
+    ds = ds.assign_coords(freq=[100.0], source_height=[40.0])
+    ds["deltaL"] = (("r", "tau", "z", "freq", "source_height"), np.full((3, 2, 2, 1, 1), -50.0))
+    ds["surface"] = (("r", "tau"), np.zeros((3, 2)))
+    ds.attrs.update(field="TL")
+    out = tl_to_deltaL(ds)
+    assert out.attrs["field"] == "deltaL" and out.deltaL.dims == ds.deltaL.dims
+    # above the surface: 50 + 20 log10(Rff); below: + 26 dB
+    rff = np.sqrt(30.0**2 + (5.0 - 40.0) ** 2)
+    assert float(out.deltaL.sel(r=30, tau=0, z=5)) == pytest.approx(50 + 20 * np.log10(rff))
+    rff = np.sqrt(30.0**2 + (-5.0 - 40.0) ** 2)
+    assert float(out.deltaL.sel(r=30, tau=90, z=-5)) == pytest.approx(50 + 20 * np.log10(rff) + 26)
+    # r = 0 is clipped to Rff >= 1 m (no -inf) and a second call does nothing
+    assert np.isfinite(out.deltaL).all()
+    assert tl_to_deltaL(out) is out
+    assert DeltaL(ds).to_deltaL().ds.attrs["field"] == "deltaL"
